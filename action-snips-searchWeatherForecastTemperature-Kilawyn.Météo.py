@@ -46,7 +46,6 @@ def action_wrapper(hermes, intentMessage, conf):
     import weather as wt
     import locale
     import random
-    from conditioncodes import CONDITION_CODES
 
     locale.setlocale(locale.LC_TIME,'')
 
@@ -57,13 +56,13 @@ def action_wrapper(hermes, intentMessage, conf):
     region = None
     startdate = datetime.datetime.now()
     rightnow = startdate
-    condition_name = None
-
+    temperature_name = None
+ 
     capital = None
 
     # Populate the parameters and sanitize them
-    if len(intentMessage.slots['forecast_condition_name']) > 0:
-        condition_name = intentMessage.slots['forecast_condition_name'].first().value
+    if len(intentMessage.slots['forecast_temperature_name']) > 0:
+        temperature_name = intentMessage.slots['forecast_temperature_name'].first().value
     if len(intentMessage.slots['forecast_start_datetime']) > 0:
         # This one is tricky, regarding the question it may be an InstantTimeValue or a TimeIntervalValue
         # In the last case, I take the start hour and add one hour to make a difference with 00:00 (see below how this is handled)
@@ -75,8 +74,8 @@ def action_wrapper(hermes, intentMessage, conf):
             startdate = startdate.from_date
         startdate = re.sub(r'^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{2}):([0-9]{2})$', r'\1\2', startdate)
         startdate = datetime.datetime.strptime(startdate, '%Y-%m-%d %H:%M:%S %z')
-        if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
-            startdate += datetime.timedelta(hours=+1)
+        #if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
+        #    startdate += datetime.timedelta(hours=+1)
         # If only a day is asked, Snips will provide a time of 00:00:00 which is not interesting for weather.
         # So I offset that by 12 hours
         if startdate.time() == datetime.time(00, 00, 00):
@@ -109,7 +108,7 @@ def action_wrapper(hermes, intentMessage, conf):
         hermes.publish_end_session(intentMessage.session_id, answer)
         return
     elif region is not None:
-        answer = "Je ne peux pas encore te donner la météo d'un région"
+        answer = "Je ne peux pas encore te donner la météo d'une région"
         hermes.publish_end_session(intentMessage.session_id, answer)
         return
     elif country != conf['secret']['default_countrycode'] and locality == conf['secret']['default_location']:
@@ -151,60 +150,73 @@ def action_wrapper(hermes, intentMessage, conf):
 
     answer = ""
     if startdate == rightnow:
-        answer += "En ce moment, il y a "
+        answer += "En ce moment, il fait "
     elif startdate.date() == rightnow.date() and startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
-        answer += "Cette après-midi il y aura "
+        answer += "Cette après-midi il fera "
     elif startdate.date() == rightnow.date() and startdate.time() < datetime.time(12, 0, 0) and startdate.time() >= datetime.time(6, 0, 0):
-        answer += "Ce matin il y aura "
+        answer += "Ce matin il fera "
     elif startdate.date() == rightnow.date() and startdate.time() > datetime.time(18, 0, 0) and startdate.time() <= datetime.time(23, 59, 59):
-        answer += "Ce soir il y aura "
+        answer += "Ce soir il fera "
     elif startdate.date() == rightnow.date() + datetime.timedelta(days=1) and startdate.time() > datetime.time(0, 0, 0) and startdate.time() < datetime.time(6, 0, 0):
-        answer += "Cette nuit il y aura "
+        answer += "Cette nuit il fera "
     elif startdate.date() == rightnow.date() + datetime.timedelta(days=1):
         if startdate.time() == datetime.time(12, 0, 0):
-            answer += "Demain il y aura "
+            answer += "Demain il fera "
         elif startdate.time() >= datetime.time(6, 0, 0) and startdate.time() < datetime.time(12, 0, 0):
-            answer += "Demain matin il y aura "
+            answer += "Demain matin il fera "
         elif startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
-            answer += "Demain après-midi il y aura "
+            answer += "Demain après-midi il fera "
         elif startdate.time() >= datetime.time(18, 0, 0) and startdate.time() <= datetime.time(23, 59, 59):
-            answer += "Demain soir il y aura "
+            answer += "Demain soir il fera "
     else:
         dayofweek = startdate.strftime("%A")
         if startdate.time() == datetime.time(12, 0, 0):
-            answer += "%s il y aura " % dayofweek
+            answer += "%s il fera " % dayofweek
         elif startdate.time() < datetime.time(12, 0, 0):
-            answer += "%s matin il y aura " % dayofweek
+            answer += "%s matin il fera " % dayofweek
         elif startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
-            answer += "%s après-midi il y aura " % dayofweek
+            answer += "%s après-midi il fera " % dayofweek
         elif startdate.time() >= datetime.time(18, 0, 0) and startdate.time() <= datetime.time(23, 59, 59):
-            answer += "%s soir il y aura " % dayofweek
-
-    et = ""
-    if len(weather['list'][selected_forecast]['weather']) > 1:
-        et = " et "
-    non_array = [
-            "Non. ",
-            "Pas vraiment. ",
-            "Il semblerait que non. ",
-    ]
-    oui_array = [
-            "Oui. ",
-            "En effet, ",
-            "Effectivement, ",
-    ]
-    oui = random.choice(non_array)
-    for w in weather['list'][selected_forecast]['weather']:
-        answer += CONDITION_CODES[w['id']]['snips'][0] + et
-        if condition_name is not None and condition_name in CONDITION_CODES[w['id']]['snips']:
-            oui = random.choice(oui_array)
-    if len(et) > 0:
-        answer = answer[:-len(et)]
-    answer += " "
-    answer = oui + answer
+            answer += "%s soir il fera " % dayofweek
 
     if locality != conf['secret']['default_location']:
-        answer += "à %s" % locality
+        answer += "à %s. " % locality
+
+    temp = "%.2f degrés" % (weather['list'][selected_forecast]['main']['temp'] - 273.15) # The temperature is given in Kelvin
+    answer += temp.replace('.', ' virgule ')
+    if temperature_name is not None:
+        tempDelta = 0
+        if selected_forecast != 0:
+            tempDelta = weather['list'][0]['main']['temp'] - weather['list'][selected_forecast]['main']['temp']
+            temp = weather['list'][selected_forecast]['main']['temp']
+        else:
+            tempDelta = weather['list'][0]['main']['temp'] - weather['list'][8]['main']['temp'] # 8*3h = 24h
+            temp = weather['list'][0]['main']['temp']
+        if temperature_name in ['refroidir', 'plus froid']:
+            if tempDelta < 0 and tempDelta > -5:
+                answer += "Donc oui, il fera un peu plus frais"
+            elif tempDelta < -5:
+                answer += "Donc oui, il fera vraiment plus frais"
+            else:
+                answer += "Donc non, le temps va se réchauffer"
+        elif temperature_name in ['réchauffer']:
+            if tempDelta > 0 and tempDelta < 5:
+                answer += "Donc oui, il fera un peu plus chaud"
+            elif tempDelta > 5:
+                answer += "Donc oui, il fera vraiment plus chaud"
+            else:
+                answer += "Donc non, le temps va se rafraîchir"
+        elif temperature_name in ['estivale', 'bouillant', 'lourd', 'étouffant', 'chaud']:
+            if temp > 28:
+                answer += "En effet, le climat s'annonce estival"
+            else:
+                answer += "ça devrait aller"
+        elif temperature_name in ['froid de canard', 'frisquet', 'frais', 'froid', 'glacial']:
+            if temp < 10:
+                answer += "En effet, la météo s'annonce bien fraîche"
+            else:
+                answer += "ça devrait aller"
+
 
     hermes.publish_end_session(intentMessage.session_id, answer)
     
@@ -214,5 +226,5 @@ if __name__ == "__main__":
     config = toml.load(f)
     mqtt_opts = MqttOptions(username=config["snips-common"]["mqtt_username"], password=config["snips-common"]["mqtt_password"], broker_address=config["snips-common"]["mqtt"])
     with Hermes(mqtt_options=mqtt_opts) as h:
-        h.subscribe_intent("searchWeatherForecastCondition", subscribe_intent_callback) \
+        h.subscribe_intent("searchWeatherForecastTemperature", subscribe_intent_callback) \
          .start()

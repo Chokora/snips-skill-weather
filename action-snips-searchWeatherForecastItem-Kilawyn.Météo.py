@@ -57,13 +57,13 @@ def action_wrapper(hermes, intentMessage, conf):
     region = None
     startdate = datetime.datetime.now()
     rightnow = startdate
-    condition_name = None
+    item = None
 
     capital = None
 
     # Populate the parameters and sanitize them
-    if len(intentMessage.slots['forecast_condition_name']) > 0:
-        condition_name = intentMessage.slots['forecast_condition_name'].first().value
+    if len(intentMessage.slots['forecast_item']) > 0:
+        item = intentMessage.slots['forecast_item'].first().value
     if len(intentMessage.slots['forecast_start_datetime']) > 0:
         # This one is tricky, regarding the question it may be an InstantTimeValue or a TimeIntervalValue
         # In the last case, I take the start hour and add one hour to make a difference with 00:00 (see below how this is handled)
@@ -75,8 +75,8 @@ def action_wrapper(hermes, intentMessage, conf):
             startdate = startdate.from_date
         startdate = re.sub(r'^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{2}):([0-9]{2})$', r'\1\2', startdate)
         startdate = datetime.datetime.strptime(startdate, '%Y-%m-%d %H:%M:%S %z')
-        if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
-            startdate += datetime.timedelta(hours=+1)
+        #if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
+        #    startdate += datetime.timedelta(hours=+1)
         # If only a day is asked, Snips will provide a time of 00:00:00 which is not interesting for weather.
         # So I offset that by 12 hours
         if startdate.time() == datetime.time(00, 00, 00):
@@ -109,7 +109,7 @@ def action_wrapper(hermes, intentMessage, conf):
         hermes.publish_end_session(intentMessage.session_id, answer)
         return
     elif region is not None:
-        answer = "Je ne peux pas encore te donner la météo d'un région"
+        answer = "Je ne peux pas encore te donner la météo d'une région"
         hermes.publish_end_session(intentMessage.session_id, answer)
         return
     elif country != conf['secret']['default_countrycode'] and locality == conf['secret']['default_location']:
@@ -150,62 +150,35 @@ def action_wrapper(hermes, intentMessage, conf):
         return
 
     answer = ""
-    if startdate == rightnow:
-        answer += "En ce moment, il y a "
-    elif startdate.date() == rightnow.date() and startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
-        answer += "Cette après-midi il y aura "
-    elif startdate.date() == rightnow.date() and startdate.time() < datetime.time(12, 0, 0) and startdate.time() >= datetime.time(6, 0, 0):
-        answer += "Ce matin il y aura "
-    elif startdate.date() == rightnow.date() and startdate.time() > datetime.time(18, 0, 0) and startdate.time() <= datetime.time(23, 59, 59):
-        answer += "Ce soir il y aura "
-    elif startdate.date() == rightnow.date() + datetime.timedelta(days=1) and startdate.time() > datetime.time(0, 0, 0) and startdate.time() < datetime.time(6, 0, 0):
-        answer += "Cette nuit il y aura "
-    elif startdate.date() == rightnow.date() + datetime.timedelta(days=1):
-        if startdate.time() == datetime.time(12, 0, 0):
-            answer += "Demain il y aura "
-        elif startdate.time() >= datetime.time(6, 0, 0) and startdate.time() < datetime.time(12, 0, 0):
-            answer += "Demain matin il y aura "
-        elif startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
-            answer += "Demain après-midi il y aura "
-        elif startdate.time() >= datetime.time(18, 0, 0) and startdate.time() <= datetime.time(23, 59, 59):
-            answer += "Demain soir il y aura "
+    
+    if item in ['éventail', 'chapeau', 'couvre-chef', 'casquette', 'turban', 'chapeau chinois', 'robe sans manche', 'créme bronzante', 'crème solaire', 'short', 'jupe', 'nuds-pieds', 'espadrilles', 'tongues', 'lunettes de soleil', 'ombrelle', 'chapeau de paille', 'vêtements légers']:
+        if weather['list'][selected_forecast]['weather'][0]['id'] in [800, 801]:
+            answer += "ça peut être utile, du soleil est prévu"
+        elif item in ['éventail', 'robe sans manche', 'short', 'jupe', 'nuds-pieds', 'espadrilles', 'tongues', 'vêtements légers']:
+            if weather['list'][selected_forecast]['main']['temp'] > 25:
+                answer += "Il va faire chaud, ça peut être utile"
+            else:
+                answer += "La température ne va pas non plus être étouffante, à toi de voir"
+        else:
+            answer += "Il semblerait que ce ne soit pas de première nécessité"
+    elif item in ['bonneterie', 'écharpe', 'bonnet', 'cagoule', 'bottes fourrées', 'manteau', 'pull', 'doudoune', 'gros pull', 'bas de laine', 'chaussettes de laine', 'chaussettes en laine', 'chaussettes chaudes', 'pull chaud', 'mouffles']:
+        if weather['list'][selected_forecast]['main']['temp'] < 8:
+            answer += "Les températures promettent d'être basses, mieux vaut être prévoyant"
+        elif weather['list'][selected_forecast]['main']['temp'] >= 8 and weather['list'][selected_forecast]['main']['temp'] < 12:
+            answer += "Il ne va pas faire affreusement froid mais sait-on jamais"
+        else:
+            answer += "Tout l'attirail anti froid ne semble pas nécessaire"
+    elif item in ['parapluie', 'capuche', 'imperméable', 'imper', 'k way']:
+        if weather['list'][selected_forecast]['weather'][0]['id'] in [300, 301, 302, 310, 311, 312, 313, 314, 321, 500, 501, 502, 503, 504, 511, 521, 522, 531, 615, 616]:
+            answer += "Il risque d'y avoir de la pluie, ça peut être intéressant de prendre ça avec"
+        elif weather['list'][selected_forecast]['weather'][0]['id'] in [200, 201, 202, 210, 211, 212, 221, 230, 231, 232]:
+            if item != "parapluie":
+                answer += "Attention, de l'orage est prévu. Prends de quoi te couvrir"
+            else:
+                answer += "Un parapluie dans un orage, c'est pas vraiment conseillé"
     else:
-        dayofweek = startdate.strftime("%A")
-        if startdate.time() == datetime.time(12, 0, 0):
-            answer += "%s il y aura " % dayofweek
-        elif startdate.time() < datetime.time(12, 0, 0):
-            answer += "%s matin il y aura " % dayofweek
-        elif startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
-            answer += "%s après-midi il y aura " % dayofweek
-        elif startdate.time() >= datetime.time(18, 0, 0) and startdate.time() <= datetime.time(23, 59, 59):
-            answer += "%s soir il y aura " % dayofweek
-
-    et = ""
-    if len(weather['list'][selected_forecast]['weather']) > 1:
-        et = " et "
-    non_array = [
-            "Non. ",
-            "Pas vraiment. ",
-            "Il semblerait que non. ",
-    ]
-    oui_array = [
-            "Oui. ",
-            "En effet, ",
-            "Effectivement, ",
-    ]
-    oui = random.choice(non_array)
-    for w in weather['list'][selected_forecast]['weather']:
-        answer += CONDITION_CODES[w['id']]['snips'][0] + et
-        if condition_name is not None and condition_name in CONDITION_CODES[w['id']]['snips']:
-            oui = random.choice(oui_array)
-    if len(et) > 0:
-        answer = answer[:-len(et)]
-    answer += " "
-    answer = oui + answer
-
-    if locality != conf['secret']['default_location']:
-        answer += "à %s" % locality
-
+        answer += "Je ne vois pas de quoi tu veux parler"
+ 
     hermes.publish_end_session(intentMessage.session_id, answer)
     
 
@@ -214,5 +187,5 @@ if __name__ == "__main__":
     config = toml.load(f)
     mqtt_opts = MqttOptions(username=config["snips-common"]["mqtt_username"], password=config["snips-common"]["mqtt_password"], broker_address=config["snips-common"]["mqtt"])
     with Hermes(mqtt_options=mqtt_opts) as h:
-        h.subscribe_intent("searchWeatherForecastCondition", subscribe_intent_callback) \
+        h.subscribe_intent("searchWeatherForecastItem", subscribe_intent_callback) \
          .start()
