@@ -1,4 +1,4 @@
-# Snips Joke Skill
+# Snips Weather Skill
 
 This is a Python3 skill allowing to retrieve information about 
 weather. It based on OpenWeatherMap, so it requires an API key.
