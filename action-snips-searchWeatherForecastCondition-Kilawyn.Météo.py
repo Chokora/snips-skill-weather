@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import configparser
+import hermes_python
 from hermes_python.hermes import Hermes
 from hermes_python.ffi.utils import MqttOptions
 from hermes_python.ontology import *
@@ -43,13 +44,44 @@ def action_wrapper(hermes, intentMessage, conf):
     
     import requests
     import html
+    import datetime
+    import re
 
-    print(intentMessage.slots['forecast_condition_name'])
-    print(intentMessage.slots['forecast_start_datetime'])
-    print(intentMessage.slots['forecast_geographical_poi'])
-    print(intentMessage.slots['forecast_region'])
-    print(intentMessage.slots['forecast_country'])
-    print(intentMessage.slots['forecast_locality'])
+    locality = conf['default_location']
+    country = conf['default_countrycode']
+    geographical_poi = None
+    region = None
+    startdate = datetime.datetime.now()
+    rightnow = startdate
+    condition_name = None
+
+    if len(intentMessage.slots['forecast_condition_name']) > 0:
+        condition_name = intentMessage.slots['forecast_condition_name'].first().value
+    if len(intentMessage.slots['forecast_start_datetime']) > 0:
+        startdate = intentMessage.slots['forecast_start_datetime'].first()
+        if type(startdate) == hermes_python.ontology.dialogue.slot.InstantTimeValue:
+            startdate = startdate.value
+        elif type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
+            startdate = startdate.from_date
+        startdate = re.sub(r'^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{2}):([0-9]{2})$', r'\1\2', startdate)
+        startdate = datetime.datetime.strptime(startdate, '%Y-%m-%d %H:%M:%S %z')
+        if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
+            startdate += datetime.timedelta(hours=+1)
+    if len(intentMessage.slots['forecast_geographical_poi']) > 0:
+        geographical_poi = intentMessage.slots['forecast_geographical_poi'].first().value
+    if len(intentMessage.slots['forecast_region']) > 0:
+        region = intentMessage.slots['forecast_region'].first().value
+    if len(intentMessage.slots['forecast_country']) > 0:
+        country = intentMessage.slots['forecast_country'].first().value
+        f = open("iso_3166.csv", 'rt')
+        for line in f:
+            line_list = line.split("\t")
+            if line_list[1].strip().lower() == country.split(" ")[-1].strip().lower():
+                country = line_list[2].lower().strip()
+                break
+        f.close()
+    if len(intentMessage.slots['forecast_locality']) > 0:
+        locality = intentMessage.slots['forecast_locality'].first().value
 
     answer = "J'attends encore les instructions"
     hermes.publish_end_session(intentMessage.session_id, answer)
@@ -61,5 +93,5 @@ if __name__ == "__main__":
     config = toml.load(f)
     mqtt_opts = MqttOptions(username=config["snips-common"]["mqtt_username"], password=config["snips-common"]["mqtt_password"], broker_address=config["snips-common"]["mqtt"])
     with Hermes(mqtt_options=mqtt_opts) as h:
-        h.subscribe_intent("Kilawyn:askJoke", subscribe_intent_callback) \
+        h.subscribe_intent("Kilawyn:searchWeatherForecastCondition", subscribe_intent_callback) \
          .start()
