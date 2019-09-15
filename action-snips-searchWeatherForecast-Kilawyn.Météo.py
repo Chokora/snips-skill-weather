@@ -66,14 +66,17 @@ def action_wrapper(hermes, intentMessage, conf):
         # In the last case, I take the start hour and add one hour to make a difference with 00:00 (see below how this is handled)
         # This should not affect the result, with the free API I can only get 3h-intervals
         startdate = intentMessage.slots['forecast_start_datetime'].first()
+        is_interval = False
         if type(startdate) == hermes_python.ontology.dialogue.slot.InstantTimeValue:
             startdate = startdate.value
         elif type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
             startdate = startdate.from_date
+            is_interval = True
         startdate = re.sub(r'^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{2}):([0-9]{2})$', r'\1\2', startdate)
         startdate = datetime.datetime.strptime(startdate, '%Y-%m-%d %H:%M:%S %z')
-        #if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
-        #    startdate += datetime.timedelta(hours=+1)
+        rightnow = datetime.datetime.now(startdate.tzinfo)
+        if is_interval:
+            startdate += datetime.timedelta(hours=+1)
         # If only a day is asked, Snips will provide a time of 00:00:00 which is not interesting for weather.
         # So I offset that by 12 hours
         if startdate.time() == datetime.time(00, 00, 00):
@@ -99,7 +102,6 @@ def action_wrapper(hermes, intentMessage, conf):
         locality = intentMessage.slots['forecast_locality'].first().value
 
     answer = "Je ne suis pas sûr de savoir quelle météo tu m'as demandée"
-
     # First of all, determine the location from which we want the weather
     if geographical_poi is not None:
         answer = "Désolé, je ne suis pas encore capable de récupérer un point d'intérêt"
@@ -131,7 +133,7 @@ def action_wrapper(hermes, intentMessage, conf):
     i = 0
     start_timestamp = startdate.timestamp()
     selected_forecast = None
-    if startdate == rightnow:
+    if startdate == rightnow or startdate - datetime.timedelta(hours=3) < rightnow:
         selected_forecast = 0
     else:
         for forecast in weather['list']:
@@ -149,7 +151,7 @@ def action_wrapper(hermes, intentMessage, conf):
     answer = ""
     if startdate == rightnow:
         answer += "En ce moment, il y a "
-    elif startdate.date() == rightnow.date() and startdate.time() > datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
+    elif startdate.date() == rightnow.date() and startdate.time() >= datetime.time(12, 0, 0) and startdate.time() < datetime.time(18, 0, 0):
         answer += "Cette après-midi il y aura "
     elif startdate.date() == rightnow.date() and startdate.time() < datetime.time(12, 0, 0) and startdate.time() >= datetime.time(6, 0, 0):
         answer += "Ce matin il il aura "

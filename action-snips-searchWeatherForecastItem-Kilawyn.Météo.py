@@ -69,14 +69,17 @@ def action_wrapper(hermes, intentMessage, conf):
         # In the last case, I take the start hour and add one hour to make a difference with 00:00 (see below how this is handled)
         # This should not affect the result, with the free API I can only get 3h-intervals
         startdate = intentMessage.slots['forecast_start_datetime'].first()
+        is_interval = False
         if type(startdate) == hermes_python.ontology.dialogue.slot.InstantTimeValue:
             startdate = startdate.value
         elif type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
             startdate = startdate.from_date
+            is_interval = True
         startdate = re.sub(r'^([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} \+[0-9]{2}):([0-9]{2})$', r'\1\2', startdate)
         startdate = datetime.datetime.strptime(startdate, '%Y-%m-%d %H:%M:%S %z')
-        #if type(startdate) == hermes_python.ontology.dialogue.slot.TimeIntervalValue:
-        #    startdate += datetime.timedelta(hours=+1)
+        rightnow = datetime.datetime.now(startdate.tzinfo)
+        if is_interval:
+            startdate += datetime.timedelta(hours=+1)
         # If only a day is asked, Snips will provide a time of 00:00:00 which is not interesting for weather.
         # So I offset that by 12 hours
         if startdate.time() == datetime.time(00, 00, 00):
@@ -134,7 +137,7 @@ def action_wrapper(hermes, intentMessage, conf):
     i = 0
     start_timestamp = startdate.timestamp()
     selected_forecast = None
-    if startdate == rightnow:
+    if startdate == rightnow or startdate - datetime.timedelta(hours=3) < rightnow:
         selected_forecast = 0
     else:
         for forecast in weather['list']:
@@ -176,6 +179,8 @@ def action_wrapper(hermes, intentMessage, conf):
                 answer += "Attention, de l'orage est prévu. Prends de quoi te couvrir"
             else:
                 answer += "Un parapluie dans un orage, c'est pas vraiment conseillé"
+        else:
+            answer += "À priori non, pas de mauvais temps prévu"
     else:
         answer += "Je ne vois pas de quoi tu veux parler"
  
